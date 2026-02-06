@@ -1,17 +1,16 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
+#include <Wire.h>
 
-// #ifdef U8X8_HAVE_HW_SPI
-// #include <SPI.h>
-// #endif
+// OPTION A: Standard SSD1306 (Try this first)
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
+
+// OPTION B: If Option A is still shifted/wrapping, uncomment this and comment out Option A
+// U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
 #include "danni.h"
 #include "she_her_data.h"
 #include "they_them_data.h"
-
-// U8G2_SSD1306_128X64_NONAME_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-U8G2_SSD1306_128X64_NONAME_F_4W_HW_SPI u8g2(U8G2_R0, /* clock= 13, data= 11,*/ /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-
 
 #define NUM_BADGES    2
 #define BADGE_WIDTH 128
@@ -26,7 +25,7 @@ uint8_t currentBadge = 0;
 uint8_t loopCount = 0;
 #define NUM_LOOPS 5
 
-void setup(void) {
+void setup() {
   u8g2.begin();
 }
 
@@ -47,5 +46,3 @@ void loop(void) {
     currentBadge = (currentBadge + 1) % NUM_BADGES;
   }
 }
-
-
