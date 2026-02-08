@@ -2,8 +2,13 @@
 #include <U8g2lib.h>
 #include <Wire.h>
 
+#define OLED_GND 20
+#define OLED_VCC 10
+#define OLED_SCL 9
+#define OLED_SDA 8
+
 // OPTION A: Standard SSD1306 (Try this first)
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2, /* reset=*/ U8X8_PIN_NONE, /*clock =*/ OLED_SCL, /*data =*/ OLED_SDA);
 
 // OPTION B: If Option A is still shifted/wrapping, uncomment this and comment out Option A
 // U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
@@ -26,6 +31,13 @@ uint8_t loopCount = 0;
 #define NUM_LOOPS 5
 
 void setup() {
+
+  // Create power for the OLED
+  pinMode(OLED_GND, OUTPUT); digitalWrite(OLED_GND, LOW);  // GND
+  pinMode(OLED_VCC, OUTPUT); digitalWrite(OLED_VCC, HIGH); // VCC
+  
+  delay(100); // Wait for OLED to stabilize
+  
   u8g2.begin();
 }
 
