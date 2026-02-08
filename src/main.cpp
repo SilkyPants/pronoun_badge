@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <Wire.h>
+#include <LittleFS.h>
 
 #include "common.h"
 #include "ble/ble.h"
@@ -10,8 +11,12 @@
 #define OLED_SCL 9
 #define OLED_SDA 8
 
-// OPTION A: Standard SSD1306 (Try this first)
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2, /* reset=*/U8X8_PIN_NONE, /*clock =*/OLED_SCL, /*data =*/OLED_SDA);
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(
+  U8G2_R2, 
+  /* reset=*/ U8X8_PIN_NONE, 
+  /*clock =*/ OLED_SCL, 
+  /*data =*/ OLED_SDA
+);
 
 #include "danni.h"
 #include "she_her_data.h"
@@ -38,8 +43,42 @@ uint8_t currentBadge = 0;
 unsigned long previousBadgeMillis = 0;
 const long badgeInterval = 5000; // 5 sec
 
-void setup()
-{
+void printLittleFSStats() {
+    size_t total = LittleFS.totalBytes();
+    size_t used = LittleFS.usedBytes();
+
+    Serial.println("--- LittleFS Stats ---");
+    Serial.print("Total Space: ");
+    Serial.print(total);
+    Serial.println(" bytes");
+
+    Serial.print("Used Space:  ");
+    Serial.print(used);
+    Serial.println(" bytes");
+    
+    // Calculate percentage
+    float usage = ((float)used / (float)total) * 100;
+    Serial.printf("Usage:       %.2f%%\n", usage);
+    Serial.println("----------------------");
+}
+
+void readFile(fs::FS &fs, const char *path) {
+  Serial.printf("Reading file: %s\r\n", path);
+
+  File file = fs.open(path);
+  if (!file || file.isDirectory()) {
+    Serial.println("- failed to open file for reading");
+    return;
+  }
+
+  Serial.println("- read from file:");
+  while (file.available()) {
+    Serial.write(file.read());
+  }
+  file.close();
+}
+
+void setup() {
 
   Serial.begin(115200);
 
@@ -54,6 +93,15 @@ void setup()
   u8g2.begin();
 
   initBLE();
+  
+  // Initialize LittleFS
+    if(!LittleFS.begin()){
+        Serial.println("An Error has occurred while mounting LittleFS");
+        return;
+    }
+
+    printLittleFSStats();
+    readFile(LittleFS, "/test.txt");
 }
 
 void loop(void)
