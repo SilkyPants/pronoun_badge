@@ -18,6 +18,7 @@ U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2, /* reset=*/U8X8_PIN_NONE, /*cl
 #include <BLE2902.h>
 
 // Unique IDs
+#define DEVICE_NAME "Pronoun Badge"
 #define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define WRITE_CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 #define READ_CHARACTERISTIC_UUID "a1b2c3d4-e5f6-47a8-b9c0-d1e2f3a4b5c6"
@@ -72,7 +73,7 @@ bool invert = false;
 void loop(void)
 {
   u8g2.clearBuffer();
-  u8g2.setColorIndex(invert && isBlinking ? 1 : 0);
+  u8g2.setColorIndex(invert && isBlinking ? 0 : 1);
   u8g2.drawXBMP(0, 0, BADGE_WIDTH, BADGE_HEIGHT, badges[currentBadge]);
   u8g2.sendBuffer();
 
@@ -151,7 +152,7 @@ void initBLE()
 {
 
   // Initialize BLE
-  BLEDevice::init("PIO_ESP32_Blinker");
+  BLEDevice::init(DEVICE_NAME);
   BLEServer *pServer = BLEDevice::createServer();
   pServer->setCallbacks(&myServerCallbacks);
 
