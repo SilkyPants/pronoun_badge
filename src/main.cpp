@@ -37,14 +37,17 @@ void initBLE();
 #include "danni.h"
 #include "she_her_data.h"
 #include "they_them_data.h"
+#include "tantalus_south.h"
 
-#define NUM_BADGES 2
+#define NUM_BADGES 3
 #define BADGE_WIDTH 128
 #define BADGE_HEIGHT 64
 
 const uint8_t *badges[] = {
     danni_bits,
-    she_her_bits};
+    she_her_bits,
+    tantalus_south_bits
+};
 
 uint8_t currentBadge = 0;
 unsigned long previousBadgeMillis = 0;
