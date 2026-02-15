@@ -4,7 +4,7 @@
 #include <LittleFS.h>
 
 #include "common.h"
-#include "ble/ble.h"
+#include "ble/BLEManager.h"
 
 #define OLED_GND 20
 #define OLED_VCC 10
@@ -12,11 +12,10 @@
 #define OLED_SDA 8
 
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(
-  U8G2_R2, 
-  /* reset=*/ U8X8_PIN_NONE, 
-  /*clock =*/ OLED_SCL, 
-  /*data =*/ OLED_SDA
-);
+    U8G2_R2,
+    /* reset=*/U8X8_PIN_NONE,
+    /*clock =*/OLED_SCL,
+    /*data =*/OLED_SDA);
 
 #include "danni.h"
 #include "she_her_data.h"
@@ -27,11 +26,12 @@ U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(
 #define BADGE_WIDTH 128
 #define BADGE_HEIGHT 64
 
+BLEManager ble;
+
 const uint8_t *badges[] = {
     danni_bits,
     she_her_bits,
-    tantalus_south_bits
-};
+    tantalus_south_bits};
 
 // State
 bool isBlinking = false;
@@ -43,42 +43,47 @@ uint8_t currentBadge = 0;
 unsigned long previousBadgeMillis = 0;
 const long badgeInterval = 5000; // 5 sec
 
-void printLittleFSStats() {
-    size_t total = LittleFS.totalBytes();
-    size_t used = LittleFS.usedBytes();
+void printLittleFSStats()
+{
+  size_t total = LittleFS.totalBytes();
+  size_t used = LittleFS.usedBytes();
 
-    Serial.println("--- LittleFS Stats ---");
-    Serial.print("Total Space: ");
-    Serial.print(total);
-    Serial.println(" bytes");
+  Serial.println("--- LittleFS Stats ---");
+  Serial.print("Total Space: ");
+  Serial.print(total);
+  Serial.println(" bytes");
 
-    Serial.print("Used Space:  ");
-    Serial.print(used);
-    Serial.println(" bytes");
-    
-    // Calculate percentage
-    float usage = ((float)used / (float)total) * 100;
-    Serial.printf("Usage:       %.2f%%\n", usage);
-    Serial.println("----------------------");
+  Serial.print("Used Space:  ");
+  Serial.print(used);
+  Serial.println(" bytes");
+
+  // Calculate percentage
+  float usage = ((float)used / (float)total) * 100;
+  Serial.printf("Usage:       %.2f%%\n", usage);
+  Serial.println("----------------------");
 }
 
-void readFile(fs::FS &fs, const char *path) {
+void readFile(fs::FS &fs, const char *path)
+{
   Serial.printf("Reading file: %s\r\n", path);
 
   File file = fs.open(path);
-  if (!file || file.isDirectory()) {
+  if (!file || file.isDirectory())
+  {
     Serial.println("- failed to open file for reading");
     return;
   }
 
   Serial.println("- read from file:");
-  while (file.available()) {
+  while (file.available())
+  {
     Serial.write(file.read());
   }
   file.close();
 }
 
-void setup() {
+void setup()
+{
 
   Serial.begin(115200);
 
@@ -92,16 +97,45 @@ void setup() {
 
   u8g2.begin();
 
-  initBLE();
-  
-  // Initialize LittleFS
-    if(!LittleFS.begin()){
-        Serial.println("An Error has occurred while mounting LittleFS");
-        return;
-    }
 
-    printLittleFSStats();
-    readFile(LittleFS, "/test.txt");
+  // Initialize LittleFS
+  if (!LittleFS.begin())
+  {
+    Serial.println("An Error has occurred while mounting LittleFS");
+    return;
+  }
+
+  printLittleFSStats();
+  readFile(LittleFS, "/test.txt");
+
+  ble.begin(DEVICE_NAME, SERVICE_UUID);
+  
+  ble.addLambdaCharacteristic<bool>(
+      BLINKING_CHARACTERISTIC_UUID,
+      [](bool val)
+      {
+        isBlinking = val;
+        invert = !isBlinking ? false : invert;
+      },
+      []()
+      {
+        return isBlinking;
+      });
+
+  ble.addHybridLambda(
+      BLINKING_HYBRID_CHARACTERISTIC_UUID,
+      [](bool val)
+      {
+        isBlinking = val;
+        invert = !isBlinking ? false : invert;
+      },
+      []()
+      {
+        return isBlinking ? "Blinking"
+                          : "Stopped";
+      });
+
+  ble.start();
 }
 
 void loop(void)
