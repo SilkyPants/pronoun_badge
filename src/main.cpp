@@ -79,6 +79,7 @@ void readFile(fs::FS &fs, const char *path)
   {
     Serial.write(file.read());
   }
+  Serial.write("\n\0");
   file.close();
 }
 
