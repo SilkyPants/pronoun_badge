@@ -28,6 +28,12 @@ const uint8_t *badges[] = {
     tantalus_south_bits
 };
 
+// State
+bool isBlinking = false;
+bool invert = false;
+unsigned long previousBlinkMillis = 0;
+const long blinkInterval = 500;
+
 uint8_t currentBadge = 0;
 unsigned long previousBadgeMillis = 0;
 const long badgeInterval = 5000; // 5 sec
