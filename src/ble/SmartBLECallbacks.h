@@ -84,7 +84,10 @@ public:
     void onWrite(BLECharacteristic *p) override {
         if (_write) {
             std::string val = p->getValue();
-            bool state = (val == "1" || val == "true" || (!val.empty() && val[0] == 0x01));
+            u_int8_t *data = p->getData();
+            size_t len = p->getLength();
+
+            bool state = (val == "1" || val == "true" || (!val.empty() && val[0] == 0x01) || (len > 0 && data[0] == 0x01));
             _write(state);
             
             // After writing, we usually want to trigger a notify 
@@ -132,7 +135,10 @@ public:
         DataType value;
         if constexpr (std::is_same_v<DataType, bool>) {
             std::string s = p->getValue();
-            value = (s == "1" || s == "true");
+            u_int8_t *data = p->getData();
+            size_t len = p->getLength();
+
+            value = (s == "1" || s == "true" || (len > 0 && data[0] == 0x01));
         } else if constexpr (std::is_same_v<DataType, int>) {
             value = atoi(p->getValue().c_str());
         } else if constexpr (std::is_same_v<DataType, std::string>) {
