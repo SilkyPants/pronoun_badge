@@ -4,7 +4,7 @@
 #include <vector>
 #include "SmartBLECallbacks.h"
 
-class BLEManager
+class BLEManager : public BLEServerCallbacks
 {
 public:
     void begin(const char *deviceName, const char *serviceUUID);
@@ -62,5 +62,10 @@ public:
 private:
     BLEServer *pServer = nullptr;
     BLEService *pService = nullptr;
+    bool deviceConnected = false;
     std::vector<BLECharacteristicCallbacks *> allocatedCallbacks;
+
+
+    void onConnect(BLEServer *pServer);
+    void onDisconnect(BLEServer *pServer);
 };

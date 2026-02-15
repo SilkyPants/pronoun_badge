@@ -4,15 +4,38 @@
 void BLEManager::begin(const char* deviceName, const char* serviceUUID) {
     BLEDevice::init(deviceName);
     pServer = BLEDevice::createServer();
+    pServer->setCallbacks(this);
     pService = pServer->createService(serviceUUID);
 }
 
 void BLEManager::start() {
     if (pService) {
-        pService->start();
-        pServer->getAdvertising()->start();
-        Serial.println("BLE Started Advertising");
+         pService->start();
+
+        // Advertising
+        BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+        pAdvertising->addServiceUUID(pService->getUUID());
+        pAdvertising->setScanResponse(true);
+        pAdvertising->setMinPreferred(0x06);
+        pAdvertising->setMaxPreferred(0x12);
+        BLEDevice::startAdvertising();
+
+        Serial.println("System online and advertising...");
     }
+}
+
+void BLEManager::onConnect(BLEServer *pServer)
+{
+    deviceConnected = true;
+    Serial.println("Device Connected");
+};
+
+void BLEManager::onDisconnect(BLEServer *pServer)
+{
+    deviceConnected = false;
+    Serial.println("Device Disconnected");
+    // Restart advertising so we can reconnect
+    BLEDevice::startAdvertising();
 }
 
 void BLEManager::cleanup() {
