@@ -189,6 +189,7 @@ class _ConnectedPageState extends State<ConnectedPage> {
   StreamSubscription<List<int>>? _notifySub;
 
   String _statusText = "Waiting..."; // Stores "Stopped" or "Blinking"
+  bool _isCurrentlyBlinking = false;
   bool _isConnected = false;
   bool _isReady = false;
 
@@ -218,17 +219,6 @@ class _ConnectedPageState extends State<ConnectedPage> {
     }, onError: (Object e) => debugPrint("Connection Error: $e"));
   }
 
-  // Helper to convert bytes to string safely
-  String _decodeData(List<int> data) {
-    if (data.isEmpty) return "Empty";
-    try {
-      // Decode ASCII/UTF-8 and trim whitespace/newlines
-      return String.fromCharCodes(data).trim();
-    } catch (e) {
-      return "Error Decoding";
-    }
-  }
-
   Future<void> _readInitialState(FlutterReactiveBle ble) async {
     final characteristic = QualifiedCharacteristic(
       serviceId: _targetServiceUuid,
@@ -241,7 +231,7 @@ class _ConnectedPageState extends State<ConnectedPage> {
       debugPrint("Read Raw Bytes: $response");
       if (mounted) {
         setState(() {
-          _statusText = _decodeData(response);
+          updateState(response);
           _isReady = true;
         });
       }
@@ -249,6 +239,12 @@ class _ConnectedPageState extends State<ConnectedPage> {
       debugPrint("Read Error: $e");
       if (mounted) setState(() => _isReady = true);
     }
+  }
+
+  void updateState(List<int> data) {
+    // Ascii for '1' due to how things are set up atm
+    _isCurrentlyBlinking = data.firstOrNull == 49;
+    _statusText = _isCurrentlyBlinking ? "Blinking" : "Stopped";
   }
 
   void _subscribeToNotifications(FlutterReactiveBle ble) {
@@ -264,7 +260,9 @@ class _ConnectedPageState extends State<ConnectedPage> {
           (data) {
             debugPrint("Notify Raw Bytes: $data");
             if (mounted) {
-              setState(() => _statusText = _decodeData(data));
+              setState(() {
+                updateState(data);
+              });
             }
           },
           onError: (dynamic error) {
@@ -279,10 +277,7 @@ class _ConnectedPageState extends State<ConnectedPage> {
     // LOGIC:
     // If text is "Blinking", we want to stop it -> Write 0
     // If text is "Stopped" (or anything else), we want to start it -> Write 1
-    final bool isCurrentlyBlinking = _statusText == "Blinking";
-    final int valueToWrite = isCurrentlyBlinking ? 0 : 1;
-
-    debugPrint("Status is '$_statusText'. Writing: $valueToWrite");
+    final int valueToWrite = _isCurrentlyBlinking ? 0 : 1;
 
     final characteristic = QualifiedCharacteristic(
       serviceId: _targetServiceUuid,
@@ -315,7 +310,6 @@ class _ConnectedPageState extends State<ConnectedPage> {
   @override
   Widget build(BuildContext context) {
     // Determine UI state based on the string
-    final bool isBlinking = _statusText == "Blinking";
 
     return Scaffold(
       appBar: AppBar(title: const Text("Badge Control")),
@@ -339,12 +333,12 @@ class _ConnectedPageState extends State<ConnectedPage> {
                       vertical: 20,
                     ),
                     decoration: BoxDecoration(
-                      color: isBlinking
+                      color: _isCurrentlyBlinking
                           ? Colors.green.shade100
                           : Colors.red.shade100,
                       borderRadius: BorderRadius.circular(15),
                       border: Border.all(
-                        color: isBlinking ? Colors.green : Colors.red,
+                        color: _isCurrentlyBlinking ? Colors.green : Colors.red,
                         width: 2,
                       ),
                     ),
@@ -355,7 +349,7 @@ class _ConnectedPageState extends State<ConnectedPage> {
                           style: TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.bold,
-                            color: isBlinking
+                            color: _isCurrentlyBlinking
                                 ? Colors.green.shade800
                                 : Colors.red.shade800,
                           ),
@@ -374,16 +368,18 @@ class _ConnectedPageState extends State<ConnectedPage> {
                   // --- TOGGLE BUTTON ---
                   ElevatedButton.icon(
                     onPressed: _isReady ? _toggleFlash : null,
-                    icon: Icon(isBlinking ? Icons.flash_off : Icons.flash_on),
+                    icon: Icon(
+                      _isCurrentlyBlinking ? Icons.flash_off : Icons.flash_on,
+                    ),
                     label: Text(
-                      isBlinking ? "STOP FLASHING" : "START FLASHING",
+                      _isCurrentlyBlinking ? "STOP FLASHING" : "START FLASHING",
                     ),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 30,
                         vertical: 15,
                       ),
-                      backgroundColor: isBlinking
+                      backgroundColor: _isCurrentlyBlinking
                           ? Colors.red
                           : Colors.green, // Visual cue
                       foregroundColor: Colors.white,
