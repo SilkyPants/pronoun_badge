@@ -1,37 +1,38 @@
 #include <Arduino.h>
-#include <U8g2lib.h>
 #include <Wire.h>
 #include <LittleFS.h>
 
 #include "common.h"
 #include "ble/BLEManager.h"
 
-#define OLED_GND 20
-#define OLED_VCC 10
-#define OLED_SCL 9
-#define OLED_SDA 8
+#ifdef USE_TFT_ESPI
+#include <TFT_eSPI.h>
+TFT_eSPI tft = TFT_eSPI();
+#endif
+
+#ifdef USE_SSD1315
+#include <U8g2lib.h>
 
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(
     U8G2_R2,
     /* reset=*/U8X8_PIN_NONE,
     /*clock =*/OLED_SCL,
     /*data =*/OLED_SDA);
+#endif
 
-#include "danni.h"
-#include "she_her_data.h"
-#include "they_them_data.h"
-#include "tantalus_south.h"
-
-#define NUM_BADGES 3
-#define BADGE_WIDTH 128
-#define BADGE_HEIGHT 64
+#ifdef SCREEN_COLOUR
+const char* badges[] = {
+    "/color-test.bin"
+};
+#else
+const char* badges[] = {
+    "/danni.bin",
+    "/she_her.bin",
+    "/tantalus_south.bin"
+};
+#endif
 
 BLEManager ble;
-
-const uint8_t *badges[] = {
-    danni_bits,
-    she_her_bits,
-    tantalus_south_bits};
 
 // State
 bool isBlinking = false;
@@ -40,6 +41,7 @@ unsigned long previousBlinkMillis = 0;
 const long blinkInterval = 500;
 
 uint8_t currentBadge = 0;
+bool needsRedraw = true;
 unsigned long previousBadgeMillis = 0;
 const long badgeInterval = 5000; // 5 sec
 
@@ -87,7 +89,11 @@ void setup()
 {
 
   Serial.begin(115200);
+  while (!Serial); // Wait for Serial port to connect
+  delay(1000);
+  Serial.println("System Initialized...");
 
+#ifdef USE_SSD1315
   // Create power for the OLED
   pinMode(OLED_GND, OUTPUT);
   digitalWrite(OLED_GND, LOW); // GND
@@ -97,6 +103,15 @@ void setup()
   delay(100); // Wait for OLED to stabilize
 
   u8g2.begin();
+#endif
+
+#ifdef USE_TFT_ESPI
+  // Initialize the display
+  tft.init();
+  tft.setRotation(1); // Landscape orientation
+
+  tft.fillScreen(TFT_WHITE);
+#endif
 
 
   // Initialize LittleFS
@@ -139,23 +154,86 @@ void setup()
   ble.start();
 }
 
+void drawImage(const char* filename, uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
+    File file = LittleFS.open(filename, "r");
+    if (!file) return;
+
+#ifdef USE_SSD1315
+
+    size_t size = file.size();
+    uint8_t* buffer = (uint8_t*)malloc(size);
+
+    if (buffer) {
+        file.read(buffer, size);
+        // U8g2's drawXBM is designed for this specific byte format
+        u8g2.drawXBM(x, y, w, h, buffer);
+        free(buffer);
+    }
+#endif
+
+#ifdef USE_TFT_ESPI
+    tft.startWrite();
+    tft.setAddrWindow(x, y, w, h);
+
+    uint16_t lineBuffer[w]; 
+    for (int row = 0; row < h; row++) {
+        file.read((uint8_t*)lineBuffer, w * 2); // 2 bytes per pixel in RGB565
+        tft.pushImage(x, y + row, w, 1, lineBuffer);
+    }
+
+    tft.endWrite();
+
+#endif
+
+    file.close();
+}
+
 void loop(void)
 {
-  u8g2.clearBuffer();
-  u8g2.setColorIndex(invert && isBlinking ? 0 : 1);
-  u8g2.drawXBMP(0, 0, BADGE_WIDTH, BADGE_HEIGHT, badges[currentBadge]);
-  u8g2.sendBuffer();
-
   unsigned long currentMillis = millis();
-  if (isBlinking && currentMillis - previousBlinkMillis >= blinkInterval)
-  {
-    previousBlinkMillis = currentMillis;
-    invert = !invert;
-  }
 
   if (currentMillis - previousBadgeMillis >= badgeInterval)
   {
     previousBadgeMillis = currentMillis;
-    currentBadge = (currentBadge + 1) % NUM_BADGES;
+    currentBadge = (currentBadge + 1) % std::size(badges);
+    needsRedraw = true;
+  }
+
+  if (isBlinking && currentMillis - previousBlinkMillis >= blinkInterval)
+  {
+    previousBlinkMillis = currentMillis;
+
+#ifdef USE_SSD1315
+    // Draw a solid box over the SAME area as the image using XOR mode
+    // Because it's XOR:
+    // First time this runs: Image is inverted.
+    // Second time this runs: Image is restored to original!
+    u8g2.setDrawColor(2); 
+    u8g2.drawBox(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT); 
+    u8g2.sendBuffer();
+    
+#endif
+
+#ifdef USE_TFT_ESPI
+    tft.invertDisplay(invert);
+#endif
+
+    invert = !invert;
+  }
+
+  if (needsRedraw)
+  {
+#ifdef USE_SSD1315
+    u8g2.clearBuffer();
+    
+    drawImage(badges[currentBadge], 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    u8g2.sendBuffer();
+#endif
+
+#ifdef USE_TFT_ESPI
+    drawImage(badges[currentBadge], 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+#endif
+
+    needsRedraw = false;
   }
 }
