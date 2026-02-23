@@ -1,5 +1,12 @@
 #pragma once
 
+/* 1. Define internal helpers */
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+
+#define GLUE_HELPER(x, y) x ## y
+#define GLUE(x, y) GLUE_HELPER(x, y)
+
 // Unique IDs
 #define DEVICE_NAME "GlowBug"
 #define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
