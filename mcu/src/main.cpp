@@ -138,7 +138,10 @@ void setup()
 #ifdef BOOT_IMAGE
   #ifdef USE_TFT_ESPI
   #else
+    u8g2.clearBuffer();
     u8g2.drawXBMP(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, BOOT_IMAGE_BITS);
+
+    u8g2.sendBuffer();
   #endif
 #endif
 
