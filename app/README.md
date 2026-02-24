@@ -1,4 +1,4 @@
-# badge_control
+# Glow Bug
 
 A new Flutter project.
 

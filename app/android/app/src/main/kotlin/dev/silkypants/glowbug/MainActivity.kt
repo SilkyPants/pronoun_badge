@@ -1,4 +1,4 @@
-package com.example.badge_control
+package dev.silkypants.glowbug
 
 import io.flutter.embedding.android.FlutterActivity
 
