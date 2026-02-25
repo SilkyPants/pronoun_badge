@@ -137,6 +137,7 @@ void setup()
 
 #ifdef BOOT_IMAGE
   #ifdef USE_TFT_ESPI
+    tft.pushImage(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, BOOT_IMAGE_BITS);
   #else
     u8g2.clearBuffer();
     u8g2.drawXBMP(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, BOOT_IMAGE_BITS);
@@ -184,7 +185,10 @@ void setup()
       });
 
   ble.start();
+
+#ifdef BOOT_IMAGE
   delay(3000);
+#endif
   previousBadgeMillis = previousBlinkMillis = millis();
 }
 

@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "assets"
+		},
+		{
+			"path": "scripts"
 		}
 	]
 }
