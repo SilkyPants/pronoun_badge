@@ -1,8 +1,9 @@
 #include "BLEManager.h"
 #include <Arduino.h>
 
-void BLEManager::begin(const char* deviceName, const char* serviceUUID) {
+void BLEManager::begin(const char* deviceName, const char* serviceUUID, const int mtu) {
     BLEDevice::init(deviceName);
+    BLEDevice::setMTU(mtu);
     pServer = BLEDevice::createServer();
     pServer->setCallbacks(this);
     pService = pServer->createService(serviceUUID);
@@ -38,8 +39,13 @@ void BLEManager::onDisconnect(BLEServer *pServer)
     BLEDevice::startAdvertising();
 }
 
+void BLEManager::onMtuChanged(BLEServer* pServer, uint16_t mtu) 
+{
+    Serial.printf("MTU exchanged: %d\n", mtu);
+}
+
 void BLEManager::cleanup() {
-// 1. Stop advertising and service
+    // 1. Stop advertising and service
     pServer->getAdvertising()->stop();
     pService->stop();
 

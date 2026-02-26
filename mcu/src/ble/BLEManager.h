@@ -7,7 +7,7 @@
 class BLEManager : public BLEServerCallbacks
 {
 public:
-    void begin(const char *deviceName, const char *serviceUUID);
+    void begin(const char *deviceName, const char *serviceUUID, const int mtu = 517 /* 517 is the max value */);
     void start();
     void cleanup();
 
@@ -68,4 +68,5 @@ private:
 
     void onConnect(BLEServer *pServer);
     void onDisconnect(BLEServer *pServer);
+    void onMtuChanged(BLEServer* pServer, uint16_t mtu);
 };
