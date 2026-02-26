@@ -1,3 +1,6 @@
+#include <vector>
+#include <string>
+
 #include <Arduino.h>
 #include <Wire.h>
 #include <LittleFS.h>
@@ -10,7 +13,6 @@
 - Include file lives under boot_images
 - is named {BOOT_IMAGE}.h
 - has the data defined as {BOOT_IMAGE}_bits
-
 */
 
 /* Include the dynamic BOOT_IMAGE header file */
@@ -19,13 +21,12 @@
 #define BOOT_IMAGES_PATH(img) boot_images/img.h
 #define BOOT_INCLUDE_HEADER STR(BOOT_IMAGES_PATH(BOOT_IMAGE))
 
-/* 4. Include the resulting header */
+/* Include the resulting header */
 #include BOOT_INCLUDE_HEADER
-/* This results in: #define BOOT_IMAGE_BITS image_name_bits */
+/* This results in: #define BOOT_IMAGE_BITS {BOOT_IMAGE}_bits */
 #define BOOT_IMAGE_BITS GLUE(BOOT_IMAGE, _bits)
 
 #endif
-
 
 #ifdef USE_TFT_ESPI
 #include <TFT_eSPI.h>
@@ -39,19 +40,8 @@ U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(
     U8G2_R2,
     /* reset=*/U8X8_PIN_NONE,
     /*clock =*/OLED_SCL,
-    /*data =*/OLED_SDA);
-#endif
-
-#ifdef SCREEN_COLOUR
-const char* badges[] = {
-    "/color-test.bin"
-};
-#else
-const char* badges[] = {
-    "/danni.bin",
-    "/she_her.bin",
-    "/tantalus_south.bin"
-};
+    /*data  =*/OLED_SDA
+  );
 #endif
 
 BLEManager ble;
@@ -62,6 +52,7 @@ bool invert = false;
 unsigned long previousBlinkMillis = 0;
 const long blinkInterval = 500;
 
+std::vector<std::string> badges;
 uint8_t currentBadge = 0;
 bool needsRedraw = true;
 unsigned long previousBadgeMillis = 0;
@@ -85,6 +76,26 @@ void printLittleFSStats()
   float usage = ((float)used / (float)total) * 100;
   Serial.printf("Usage:       %.2f%%\n", usage);
   Serial.println("----------------------");
+}
+
+void loadImageNames() {
+    badges.clear();
+
+    // Open the root directory
+    File root = LittleFS.open("/");
+    if (!root || !root.isDirectory()) {
+        Serial.println(" - failed to open directory");
+        return;
+    }
+
+    File file = root.openNextFile();
+    while (file) {
+        // Add the filename to our vector
+        badges.push_back(std::string("/") + file.name());
+        
+        // Move to the next file
+        file = root.openNextFile();
+    }
 }
 
 void readFile(fs::FS &fs, const char *path)
@@ -131,8 +142,6 @@ void setup()
   // Initialize the display
   tft.init();
   tft.setRotation(1); // Landscape orientation
-
-  tft.fillScreen(TFT_WHITE);
 #endif
 
 #ifdef BOOT_IMAGE
@@ -141,7 +150,6 @@ void setup()
   #else
     u8g2.clearBuffer();
     u8g2.drawXBMP(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, BOOT_IMAGE_BITS);
-
     u8g2.sendBuffer();
   #endif
 #endif
@@ -155,7 +163,7 @@ void setup()
   }
 
   printLittleFSStats();
-  readFile(LittleFS, "/test.txt");
+  loadImageNames();
 
   ble.begin(DEVICE_NAME, SERVICE_UUID);
   
@@ -203,10 +211,13 @@ void drawImage(const char* filename, uint8_t x, uint8_t y, uint8_t w, uint8_t h)
 
     if (buffer) {
         file.read(buffer, size);
+        u8g2.clearBuffer();
         // U8g2's drawXBM is designed for this specific byte format
         u8g2.drawXBM(x, y, w, h, buffer);
+        u8g2.sendBuffer();
         free(buffer);
     }
+
 #endif
 
 #ifdef USE_TFT_ESPI
@@ -220,7 +231,6 @@ void drawImage(const char* filename, uint8_t x, uint8_t y, uint8_t w, uint8_t h)
     }
 
     tft.endWrite();
-
 #endif
 
     file.close();
@@ -233,7 +243,7 @@ void loop(void)
   if (currentMillis - previousBadgeMillis >= badgeInterval)
   {
     previousBadgeMillis = currentMillis;
-    currentBadge = (currentBadge + 1) % std::size(badges);
+    currentBadge = (currentBadge + 1) % badges.size();
     needsRedraw = true;
   }
 
@@ -249,7 +259,6 @@ void loop(void)
     u8g2.setDrawColor(2); 
     u8g2.drawBox(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT); 
     u8g2.sendBuffer();
-    
 #endif
 
 #ifdef USE_TFT_ESPI
@@ -261,16 +270,7 @@ void loop(void)
 
   if (needsRedraw)
   {
-#ifdef USE_SSD1315
-    u8g2.clearBuffer();
-    
-    drawImage(badges[currentBadge], 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-    u8g2.sendBuffer();
-#endif
-
-#ifdef USE_TFT_ESPI
-    drawImage(badges[currentBadge], 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-#endif
+    drawImage(badges[currentBadge].c_str(), 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
     needsRedraw = false;
   }
