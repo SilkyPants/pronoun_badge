@@ -8,7 +8,10 @@
 #define GLUE(x, y) GLUE_HELPER(x, y)
 
 // Unique IDs
+#ifndef DEVICE_NAME
 #define DEVICE_NAME "GlowBug"
+#endif
+
 #define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define BLINKING_CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 #define BLINKING_HYBRID_CHARACTERISTIC_UUID "a1b2c3d4-e5f6-47a8-b9c0-d1e2f3a4b5c6"
