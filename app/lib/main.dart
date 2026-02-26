@@ -11,9 +11,6 @@ final Uuid _targetServiceUuid = Uuid.parse(
 );
 final Uuid _writeCharUuid = Uuid.parse("beb5483e-36e1-4688-b7f5-ea07361b26a8");
 final Uuid _readNotifyCharUuid = _writeCharUuid;
-// Uuid.parse(
-//   "a1b2c3d4-e5f6-47a8-b9c0-d1e2f3a4b5c6",
-//);
 
 void main() {
   runApp(
