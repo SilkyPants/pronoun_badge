@@ -29,7 +29,7 @@
 			// in this section it is needed to add all of the files and directories that are 
 			// located in the workspace root but are not needed in the explorer view
 			// "ignore_me.txt": true
-			".gitignore": false,
+			"*.code-workspace": true,
 		},
 	}
 }
