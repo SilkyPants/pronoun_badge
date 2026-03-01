@@ -188,7 +188,7 @@ void loop(void)
   {
     previousBlinkMillis = currentMillis;
 
-    invertDisplay();
+    invertDisplay(invert);
 
     invert = !invert;
   }

@@ -106,7 +106,7 @@ void drawImage(const char *filename, uint8_t x, uint8_t y, uint8_t w, uint8_t h)
     file.close();
 }
 
-void invertDisplay()
+void invertDisplay(bool invert)
 {
 #ifdef USE_SSD1315
     // Draw a solid box over the SAME area as the image using XOR mode
