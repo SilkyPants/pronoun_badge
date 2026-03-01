@@ -1,54 +1,13 @@
-#include <vector>
-#include <string>
-
 #include <Arduino.h>
 #include <Wire.h>
 #include <LittleFS.h>
 
 #include "common.h"
-#include "CommandTypes.h"
-#include "Protocol.h"
-
+#include "display/Display.h"
 #include "ble/BLEManager.h"
 #include "data_transfer/DataTransferManager.h"
-
-#ifdef BOOT_IMAGE
-/* This all assumes that:
-- Include file lives under boot_images
-- is named {BOOT_IMAGE}.h
-- has the data defined as {BOOT_IMAGE}_bits
-*/
-
-/* Include the dynamic BOOT_IMAGE header file */
-/* We build the path as a single token sequence, then stringize it.
-   Note: No quotes inside the 'PATH' macro. */
-#define BOOT_IMAGES_PATH(img) boot_images/img.h
-#define BOOT_INCLUDE_HEADER STR(BOOT_IMAGES_PATH(BOOT_IMAGE))
-
-/* Include the resulting header */
-#include BOOT_INCLUDE_HEADER
-/* This results in: #define BOOT_IMAGE_BITS {BOOT_IMAGE}_bits */
-#define BOOT_IMAGE_BITS GLUE(BOOT_IMAGE, _bits)
-
-#endif
-
-#ifdef USE_TFT_ESPI
-#include <TFT_eSPI.h>
-TFT_eSPI tft = TFT_eSPI();
-#endif
-
-#ifdef USE_SSD1315
-#include <U8g2lib.h>
-
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(
-    U8G2_R2,
-    /*reset =*/U8X8_PIN_NONE,
-    /*clock =*/OLED_SCL,
-    /*data  =*/OLED_SDA
-  );
-#endif
-
-BLEManager ble;
+#include "data_transfer/CommandTypes.h"
+#include "data_transfer/Protocol.h"
 
 // State
 bool isBlinking = false;
@@ -56,33 +15,47 @@ bool invert = false;
 unsigned long previousBlinkMillis = 0;
 const long blinkInterval = 500;
 
-std::vector<std::string> badges;
+#define MAX_FILES 20
+#define MAX_FILENAME_LEN 32
+
+char badgeList[MAX_FILES][MAX_FILENAME_LEN];
+int badgeCount = 0;
 uint8_t currentBadge = 0;
+
 bool needsRedraw = true;
 unsigned long previousBadgeMillis = 0;
 const long badgeInterval = 5000; // 5 sec
 
-// --- COMMAND 1: Toggle LED (OpCode 0x01) ---
-void cmd_led(size_t len, const uint8_t* data, BLECharacteristic* pChar) {
+// --- COMMAND 1: Toggle Flashing (OpCode 0x01) ---
+void cmd_flash(size_t len, const uint8_t* data, BLECharacteristic* pChar) {
     if (len >= 1) {
         isBlinking = (data[0] != 0);
         invert = !isBlinking ? false : invert;
         
         // Send acknowledgment back
-        uint8_t response[] = {OpCodes::SET_LED, data[0]}; 
+        uint8_t response[] = {OpCodes::SET_FLASH, data[0]}; 
         pChar->setValue(response, 2);
         pChar->notify();
     }
 }
 
+struct __attribute__((packed)) StatusPacket {
+    const uint8_t opCode = OpCodes::GET_STATUS; // 1 byte
+    uint8_t flashingState;                      // 1 byte
+    uint32_t totalFS;                           // 4 bytes
+    uint32_t usedFS;                            // 4 bytes
+};
+
 // --- COMMAND 3: List LittleFS Directory (OpCode 0x02) ---
 void cmd_get_status(size_t len, const uint8_t* data, BLECharacteristic* pChar) {
-    // 1. Prepare the packet: [OpCode, State]
-    // We reuse GET_STATUS so the Flutter app knows which request this is answering
-    uint8_t response[] = { OpCodes::GET_STATUS, isBlinking }; 
-    
+    // 1. Prepare the packet:
+    StatusPacket packet;
+    packet.flashingState = isBlinking;
+    packet.totalFS = isBlinking;
+    packet.usedFS = isBlinking;
+
     // 2. Push to BLE stack and alert the phone
-    pChar->setValue(response, 2);
+    pChar->setValue((uint8_t*)&packet, sizeof(StatusPacket));
     pChar->notify();
 }
 
@@ -117,7 +90,7 @@ void cmd_list_files(size_t len, const uint8_t* data, BLECharacteristic* pChar) {
 
 // --- THE REGISTRY ---
 static const CommandEntry bleCommands[] = {
-    {OpCodes::SET_LED,    cmd_led},
+    {OpCodes::SET_FLASH,    cmd_flash},
     {OpCodes::GET_STATUS, cmd_get_status},
     {OpCodes::LIST_FILES, cmd_list_files},
     /* */
@@ -148,23 +121,23 @@ void printLittleFSStats()
 }
 
 void loadImageNames() {
-    badges.clear();
-
-    // Open the root directory
+    badgeCount = 0;
     File root = LittleFS.open("/");
-    if (!root || !root.isDirectory()) {
-        Serial.println(" - failed to open directory");
-        return;
-    }
+    
+    if (!root || !root.isDirectory()) return;
 
     File file = root.openNextFile();
-    while (file) {
-        // Add the filename to our vector
-        badges.push_back(std::string("/") + file.name());
+    while (file && badgeCount < MAX_FILES) {
+        // Copy filename directly into our pre-allocated slots
+        strncpy(badgeList[badgeCount], file.name(), MAX_FILENAME_LEN - 1);
         
-        // Move to the next file
+        // Ensure null-termination
+        badgeList[badgeCount][MAX_FILENAME_LEN - 1] = '\0';
+        
+        badgeCount++;
         file = root.openNextFile();
     }
+    root.close();
 }
 
 void setup()
@@ -175,34 +148,7 @@ void setup()
   delay(1000);
   Serial.println("System Initialized...");
 
-#ifdef USE_SSD1315
-  // Create power for the OLED
-  pinMode(OLED_GND, OUTPUT);
-  digitalWrite(OLED_GND, LOW); // GND
-  pinMode(OLED_VCC, OUTPUT);
-  digitalWrite(OLED_VCC, HIGH); // VCC
-
-  delay(100); // Wait for OLED to stabilize
-
-  u8g2.begin();
-#endif
-
-#ifdef USE_TFT_ESPI
-  // Initialize the display
-  tft.init();
-  tft.setRotation(1); // Landscape orientation
-#endif
-
-#ifdef BOOT_IMAGE
-  #ifdef USE_TFT_ESPI
-    tft.pushImage(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, BOOT_IMAGE_BITS);
-  #else
-    u8g2.clearBuffer();
-    u8g2.drawXBMP(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, BOOT_IMAGE_BITS);
-    u8g2.sendBuffer();
-  #endif
-#endif
-
+  initDisplay();
 
   // Initialize LittleFS
   if (!LittleFS.begin())
@@ -226,42 +172,6 @@ void setup()
   previousBadgeMillis = previousBlinkMillis = millis();
 }
 
-void drawImage(const char* filename, uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
-    File file = LittleFS.open(filename, "r");
-    if (!file) return;
-
-#ifdef USE_SSD1315
-
-    size_t size = file.size();
-    uint8_t* buffer = (uint8_t*)malloc(size);
-
-    if (buffer) {
-        file.read(buffer, size);
-        u8g2.clearBuffer();
-        // U8g2's drawXBM is designed for this specific byte format
-        u8g2.drawXBM(x, y, w, h, buffer);
-        u8g2.sendBuffer();
-        free(buffer);
-    }
-
-#endif
-
-#ifdef USE_TFT_ESPI
-    tft.startWrite();
-    tft.setAddrWindow(x, y, w, h);
-
-    uint16_t lineBuffer[w]; 
-    for (int row = 0; row < h; row++) {
-        file.read((uint8_t*)lineBuffer, w * 2); // 2 bytes per pixel in RGB565
-        tft.pushImage(x, y + row, w, 1, lineBuffer);
-    }
-
-    tft.endWrite();
-#endif
-
-    file.close();
-}
-
 void loop(void)
 {
   unsigned long currentMillis = millis();
@@ -270,7 +180,7 @@ void loop(void)
   if (currentMillis - previousBadgeMillis >= badgeInterval)
   {
     previousBadgeMillis = currentMillis;
-    currentBadge = (currentBadge + 1) % badges.size();
+    currentBadge = (currentBadge + 1) % badgeCount;
     needsRedraw = true;
   }
 
@@ -278,26 +188,14 @@ void loop(void)
   {
     previousBlinkMillis = currentMillis;
 
-#ifdef USE_SSD1315
-    // Draw a solid box over the SAME area as the image using XOR mode
-    // Because it's XOR:
-    // First time this runs: Image is inverted.
-    // Second time this runs: Image is restored to original!
-    u8g2.setDrawColor(2); 
-    u8g2.drawBox(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT); 
-    u8g2.sendBuffer();
-#endif
-
-#ifdef USE_TFT_ESPI
-    tft.invertDisplay(invert);
-#endif
+    invertDisplay();
 
     invert = !invert;
   }
 
   if (needsRedraw)
   {
-    drawImage(badges[currentBadge].c_str(), 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    drawImage(badgeList[currentBadge], 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
     needsRedraw = false;
   }

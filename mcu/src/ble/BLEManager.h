@@ -1,26 +1,7 @@
 #pragma once
 #include <BLEDevice.h>
-
-#include "CommandTypes.h"
-
 #include <BLE2902.h> // REQUIRED FOR NOTIFICATIONS
-
-class ICommand {
-public:
-    virtual ~ICommand() = default;
-    virtual std::optional<std::string> execute(const std::vector<std::string>& args) = 0;
-};
-
-// 2. The template wrapper that "holds" any lambda type
-template <typename F>
-class LambdaWrapper : public ICommand {
-    F func;
-public:
-    LambdaWrapper(F&& f) : func(std::move(f)) {}
-    std::optional<std::string> execute(const std::vector<std::string>& args) override {
-        return func(args);
-    }
-};
+#include "data_transfer/CommandTypes.h"
 
 class BLEManager : public BLEServerCallbacks, public BLECharacteristicCallbacks
 {
@@ -60,3 +41,5 @@ public:
     // Override the onWrite method from BLECharacteristicCallbacks
     void onWrite(BLECharacteristic* pCharacteristic) override;
 };
+
+extern BLEManager ble;

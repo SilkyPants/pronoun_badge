@@ -3,6 +3,7 @@
 
 #include "data_transfer/DataTransferManager.h"
 
+BLEManager ble;
 
 void BLEManager::begin(const char* deviceName, const char* serviceUUID, const char* commandCharUUID, const int mtu) {
     BLEDevice::init(deviceName);

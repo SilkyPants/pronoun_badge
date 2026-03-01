@@ -3,7 +3,7 @@
 
 struct OpCodes {
     // Commands sent from Flutter to ESP32
-    static constexpr uint8_t SET_LED      = 0x01;
+    static constexpr uint8_t SET_FLASH      = 0x01;
     static constexpr uint8_t GET_STATUS   = 0x02;
     static constexpr uint8_t LIST_FILES   = 0x04;
 
