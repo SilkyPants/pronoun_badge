@@ -6,7 +6,11 @@
 #include <LittleFS.h>
 
 #include "common.h"
+#include "CommandTypes.h"
+#include "Protocol.h"
+
 #include "ble/BLEManager.h"
+#include "data_transfer/DataTransferManager.h"
 
 #ifdef BOOT_IMAGE
 /* This all assumes that:
@@ -38,7 +42,7 @@ TFT_eSPI tft = TFT_eSPI();
 
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(
     U8G2_R2,
-    /* reset=*/U8X8_PIN_NONE,
+    /*reset =*/U8X8_PIN_NONE,
     /*clock =*/OLED_SCL,
     /*data  =*/OLED_SDA
   );
@@ -57,6 +61,71 @@ uint8_t currentBadge = 0;
 bool needsRedraw = true;
 unsigned long previousBadgeMillis = 0;
 const long badgeInterval = 5000; // 5 sec
+
+// --- COMMAND 1: Toggle LED (OpCode 0x01) ---
+void cmd_led(size_t len, const uint8_t* data, BLECharacteristic* pChar) {
+    if (len >= 1) {
+        isBlinking = (data[0] != 0);
+        invert = !isBlinking ? false : invert;
+        
+        // Send acknowledgment back
+        uint8_t response[] = {OpCodes::SET_LED, data[0]}; 
+        pChar->setValue(response, 2);
+        pChar->notify();
+    }
+}
+
+// --- COMMAND 3: List LittleFS Directory (OpCode 0x02) ---
+void cmd_get_status(size_t len, const uint8_t* data, BLECharacteristic* pChar) {
+    // 1. Prepare the packet: [OpCode, State]
+    // We reuse GET_STATUS so the Flutter app knows which request this is answering
+    uint8_t response[] = { OpCodes::GET_STATUS, isBlinking }; 
+    
+    // 2. Push to BLE stack and alert the phone
+    pChar->setValue(response, 2);
+    pChar->notify();
+}
+
+// --- COMMAND 3: List LittleFS Directory (OpCode 0x04) ---
+void cmd_list_files(size_t len, const uint8_t* data, BLECharacteristic* pChar) {
+    File root = LittleFS.open("/");
+    if (!root) {
+        uint8_t err[] = {OpCodes::LIST_FILES, OpCodes::STATUS_ERR};
+        pChar->setValue(err, 2);
+        pChar->notify();
+        return;
+    }
+
+    File file = root.openNextFile();
+    while (file) {
+        String fileName = file.name();
+        uint8_t response[32];
+        
+        response[0] = OpCodes::FILE_ENTRY; // Using the Enum-style struct
+        memcpy(&response[1], fileName.c_str(), fileName.length());
+
+        pChar->setValue(response, fileName.length() + 1);
+        pChar->notify();
+        file = root.openNextFile();
+        delay(15);
+    }
+    
+    uint8_t end[] = {OpCodes::LIST_FILES, OpCodes::STATUS_OK};
+    pChar->setValue(end, 2);
+    pChar->notify();
+}
+
+// --- THE REGISTRY ---
+static const CommandEntry bleCommands[] = {
+    {OpCodes::SET_LED,    cmd_led},
+    {OpCodes::GET_STATUS, cmd_get_status},
+    {OpCodes::LIST_FILES, cmd_list_files},
+    /* */
+    { OpCodes::FILE_UPLOAD_START, DataTransferManager::handleStartFile },
+    { OpCodes::OTA_START,         DataTransferManager::handleStartOTA },
+    { OpCodes::UPLOAD_DATA,       DataTransferManager::handleData },
+    { OpCodes::UPLOAD_END,        DataTransferManager::handleEnd }
+};
 
 void printLittleFSStats()
 {
@@ -96,26 +165,6 @@ void loadImageNames() {
         // Move to the next file
         file = root.openNextFile();
     }
-}
-
-void readFile(fs::FS &fs, const char *path)
-{
-  Serial.printf("Reading file: %s\r\n", path);
-
-  File file = fs.open(path);
-  if (!file || file.isDirectory())
-  {
-    Serial.println("- failed to open file for reading");
-    return;
-  }
-
-  Serial.println("- read from file:");
-  while (file.available())
-  {
-    Serial.write(file.read());
-  }
-  Serial.write("\n\0");
-  file.close();
 }
 
 void setup()
@@ -165,32 +214,9 @@ void setup()
   printLittleFSStats();
   loadImageNames();
 
-  ble.begin(DEVICE_NAME, SERVICE_UUID);
-  
-  ble.addLambdaCharacteristic<bool>(
-      BLINKING_CHARACTERISTIC_UUID,
-      [](bool val)
-      {
-        isBlinking = val;
-        invert = !isBlinking ? false : invert;
-      },
-      []()
-      {
-        return isBlinking;
-      });
+  ble.setRegistry(bleCommands, sizeof(bleCommands) / sizeof(CommandEntry));
 
-  ble.addHybridLambda(
-      BLINKING_HYBRID_CHARACTERISTIC_UUID,
-      [](bool val)
-      {
-        isBlinking = val;
-        invert = !isBlinking ? false : invert;
-      },
-      []()
-      {
-        return isBlinking ? "Blinking"
-                          : "Stopped";
-      });
+  ble.begin(DEVICE_NAME, SERVICE_UUID, COMMAND_CHARACTERISTIC_UUID);
 
   ble.start();
 
@@ -239,6 +265,7 @@ void drawImage(const char* filename, uint8_t x, uint8_t y, uint8_t w, uint8_t h)
 void loop(void)
 {
   unsigned long currentMillis = millis();
+  ble.loop();
 
   if (currentMillis - previousBadgeMillis >= badgeInterval)
   {

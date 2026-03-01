@@ -1,72 +1,62 @@
 #pragma once
 #include <BLEDevice.h>
-#include <BLE2902.h> // REQUIRED FOR NOTIFICATIONS
-#include <vector>
-#include "SmartBLECallbacks.h"
 
-class BLEManager : public BLEServerCallbacks
+#include "CommandTypes.h"
+
+#include <BLE2902.h> // REQUIRED FOR NOTIFICATIONS
+
+class ICommand {
+public:
+    virtual ~ICommand() = default;
+    virtual std::optional<std::string> execute(const std::vector<std::string>& args) = 0;
+};
+
+// 2. The template wrapper that "holds" any lambda type
+template <typename F>
+class LambdaWrapper : public ICommand {
+    F func;
+public:
+    LambdaWrapper(F&& f) : func(std::move(f)) {}
+    std::optional<std::string> execute(const std::vector<std::string>& args) override {
+        return func(args);
+    }
+};
+
+class BLEManager : public BLEServerCallbacks, public BLECharacteristicCallbacks
 {
 public:
-    void begin(const char *deviceName, const char *serviceUUID, const int mtu = 517 /* 517 is the max value */);
+    void begin(
+        const char *deviceName, 
+        const char *serviceUUID, 
+        const char* commandCharUUID, 
+        const int mtu = 517 /* 517 is the max value */
+    );
     void start();
+    void loop();
     void cleanup();
-
-    // Upgraded Template: Accepts Properties, Setter, and Getter
-    template <typename T, typename DataType>
-    BLECharacteristic *addCharacteristic(
-        const char *uuid,
-        uint32_t properties,
-        T *instance,
-        void (T::*setter)(DataType),
-        DataType (T::*getter)() = nullptr)
-    {
-        BLECharacteristic *pChar = pService->createCharacteristic(uuid, properties);
-
-        // Attach callbacks if a setter or getter is provided
-        if (setter || getter)
-        {
-            auto *cb = new SmartBLECallbacks<T, DataType>(instance, setter, getter);
-            pChar->setCallbacks(cb);
-            allocatedCallbacks.push_back(cb);
-        }
-
-        // If Notify is enabled, add the required BLE2902 Descriptor
-        if (properties & BLECharacteristic::PROPERTY_NOTIFY)
-        {
-            pChar->addDescriptor(new BLE2902());
-        }
-
-        return pChar; // Return pointer so main.cpp can send notifications!
-    }
-
-    template <typename DataType>
-    void addLambdaCharacteristic(const char *uuid,
-                                 std::function<void(DataType)> onSet,
-                                 std::function<DataType()> onGet)
-    {
-
-        uint32_t props = BLECharacteristic::PROPERTY_READ |
-                         BLECharacteristic::PROPERTY_WRITE |
-                         BLECharacteristic::PROPERTY_NOTIFY;
-
-        BLECharacteristic *pChar = pService->createCharacteristic(uuid, props);
-        pChar->addDescriptor(new BLE2902());
-
-        auto *cb = new SymmetricLambdaCallbacks<DataType>(onSet, onGet, pChar);
-        pChar->setCallbacks(cb);
-        allocatedCallbacks.push_back(cb);
-    }
-
-    void addHybridLambda(const char *uuid, std::function<void(bool)> onSet, std::function<std::string()> onGet);
 
 private:
     BLEServer *pServer = nullptr;
     BLEService *pService = nullptr;
+    BLECharacteristic* pCommandCharacteristic = nullptr;
     bool deviceConnected = false;
-    std::vector<BLECharacteristicCallbacks *> allocatedCallbacks;
-
 
     void onConnect(BLEServer *pServer);
     void onDisconnect(BLEServer *pServer);
     void onMtuChanged(BLEServer* pServer, uint16_t mtu);
+
+    // Add these to your private members in BLEManager.h
+private:
+    const CommandEntry* _registry = nullptr;
+    size_t _registryCount = 0;
+    BLECharacteristic* pCommandChar = nullptr; // Store this to send notifications back
+
+public:
+    void setRegistry(const CommandEntry* registry, size_t count) {
+        _registry = registry;
+        _registryCount = count;
+    }
+    
+    // Override the onWrite method from BLECharacteristicCallbacks
+    void onWrite(BLECharacteristic* pCharacteristic) override;
 };

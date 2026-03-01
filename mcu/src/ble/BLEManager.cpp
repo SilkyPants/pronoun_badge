@@ -1,12 +1,24 @@
 #include "BLEManager.h"
 #include <Arduino.h>
 
-void BLEManager::begin(const char* deviceName, const char* serviceUUID, const int mtu) {
+#include "data_transfer/DataTransferManager.h"
+
+
+void BLEManager::begin(const char* deviceName, const char* serviceUUID, const char* commandCharUUID, const int mtu) {
     BLEDevice::init(deviceName);
     BLEDevice::setMTU(mtu);
     pServer = BLEDevice::createServer();
     pServer->setCallbacks(this);
     pService = pServer->createService(serviceUUID);
+
+    // Setup command characteristic
+    uint32_t props = BLECharacteristic::PROPERTY_WRITE | 
+                     /* BLECharacteristic::PROPERTY_READ | */ 
+                     BLECharacteristic::PROPERTY_NOTIFY;
+
+    pCommandCharacteristic = pService->createCharacteristic(commandCharUUID, props);
+    pCommandCharacteristic->addDescriptor(new BLE2902());
+    pCommandCharacteristic->setCallbacks(this);
 }
 
 void BLEManager::start() {
@@ -23,6 +35,11 @@ void BLEManager::start() {
 
         Serial.println("System online and advertising...");
     }
+}
+
+void BLEManager::loop() 
+{
+    DataTransferManager::loop(pCommandCharacteristic);
 }
 
 void BLEManager::onConnect(BLEServer *pServer)
@@ -48,29 +65,28 @@ void BLEManager::cleanup() {
     // 1. Stop advertising and service
     pServer->getAdvertising()->stop();
     pService->stop();
-
-    Serial.println("Cleaning up BLE Callbacks...");
-    // 2. Iterate through stored pointers and delete
-    for (auto* cb : allocatedCallbacks) {
-        delete cb; 
-    }
-    allocatedCallbacks.clear();
     
     Serial.println("BLE Resources Freed Safely");
 }
 
-void BLEManager::addHybridLambda(const char* uuid, 
-                     std::function<void(bool)> onSet, 
-                     std::function<std::string()> onGet) {
-                     
-    uint32_t props = BLECharacteristic::PROPERTY_READ | 
-                     BLECharacteristic::PROPERTY_WRITE | 
-                     BLECharacteristic::PROPERTY_NOTIFY;
+void BLEManager::onWrite(BLECharacteristic* pCharacteristic) {
+    uint8_t* pData = pCharacteristic->getData();
+    size_t len = pCharacteristic->getLength();
+    
+    if (len < 1 || _registry == nullptr) return;
 
-    BLECharacteristic* pChar = pService->createCharacteristic(uuid, props);
-    pChar->addDescriptor(new BLE2902());
+    uint8_t opCode = pData[0];
+    const uint8_t* payload = (len > 1) ? &pData[1] : nullptr;
+    size_t payloadLen = len - 1;
 
-    auto* cb = new LambdaBLECallbacks(onSet, onGet, pChar);
-    pChar->setCallbacks(cb);
-    allocatedCallbacks.push_back(cb);
+    // Linear search is O(N), perfectly fast for a small list of OpCodes
+    for (size_t i = 0; i < _registryCount; i++) {
+        if (_registry[i].opCode == opCode) {
+            // Execute the command, passing the payload AND the characteristic
+            _registry[i].function(payloadLen, payload, pCharacteristic);
+            return;
+        }
+    }
+    
+    Serial.printf("Unknown OpCode: 0x%02X\n", opCode);
 }
