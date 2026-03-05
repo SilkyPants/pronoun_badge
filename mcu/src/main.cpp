@@ -88,11 +88,24 @@ void cmd_list_files(size_t len, const uint8_t* data, BLECharacteristic* pChar) {
     pChar->notify();
 }
 
+// --- COMMAND 3: Restart Device (OpCode 0x99) ---
+unsigned long restart_countdown = -1;
+void cmd_restart_esp(size_t len, const uint8_t* data, BLECharacteristic* pChar) {
+  
+      // Send acknowledgment back
+      uint8_t response[] = {OpCodes::RESTART_ESP, OpCodes::STATUS_OK}; 
+      pChar->setValue(response, 2);
+      pChar->notify();
+
+      restart_countdown = millis() + 1000;
+}
+
 // --- THE REGISTRY ---
 static const CommandEntry bleCommands[] = {
     {OpCodes::SET_FLASH,    cmd_flash},
     {OpCodes::GET_STATUS, cmd_get_status},
     {OpCodes::LIST_FILES, cmd_list_files},
+    {OpCodes::RESTART_ESP, cmd_restart_esp},
     /* */
     { OpCodes::FILE_UPLOAD_START, DataTransferManager::handleStartFile },
     { OpCodes::OTA_START,         DataTransferManager::handleStartOTA },
@@ -176,6 +189,10 @@ void loop(void)
 {
   unsigned long currentMillis = millis();
   ble.loop();
+
+  if (restart_countdown > 0 && currentMillis >= restart_countdown) {
+    ESP.restart();
+  }
 
   if (currentMillis - previousBadgeMillis >= badgeInterval)
   {

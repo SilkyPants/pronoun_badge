@@ -80,6 +80,7 @@ void BLEManager::onWrite(BLECharacteristic* pCharacteristic) {
     const uint8_t* payload = (len > 1) ? &pData[1] : nullptr;
     size_t payloadLen = len - 1;
 
+    Serial.printf("OpCode Detected: 0x%02X\n", opCode);
     // Linear search is O(N), perfectly fast for a small list of OpCodes
     for (size_t i = 0; i < _registryCount; i++) {
         if (_registry[i].opCode == opCode) {

@@ -7,6 +7,8 @@ struct OpCodes {
     static constexpr uint8_t GET_STATUS   = 0x02;
     static constexpr uint8_t LIST_FILES   = 0x04;
 
+    static constexpr uint8_t RESTART_ESP  = 0x99;
+
     static constexpr uint8_t FILE_UPLOAD_START = 0x10; // Payload: [size(4), name(...)]
     static constexpr uint8_t OTA_START         = 0x20; // Payload: [size(4)]
     static constexpr uint8_t UPLOAD_DATA       = 0x11; // Payload: [raw bytes]

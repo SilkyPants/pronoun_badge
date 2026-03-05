@@ -137,6 +137,11 @@ class _ConnectedPageState extends State<ConnectedPage> {
                 //   );
                 //   break;
 
+                case OpCodes.restartEsp:
+                  debugPrint("Restart OpCode ACK");
+                  Navigator.pop(context);
+                  break;
+
                 default:
                   debugPrint("Unhandled OpCode: $opCode");
               }
@@ -146,6 +151,31 @@ class _ConnectedPageState extends State<ConnectedPage> {
             debugPrint("Notification Error: $error");
           },
         );
+  }
+
+  Future<void> _restartESP() async {
+    final ble = Provider.of<FlutterReactiveBle>(context, listen: false);
+
+    final characteristic = QualifiedCharacteristic(
+      serviceId: targetServiceUuid,
+      characteristicId: commandCharacteristicUuid,
+      deviceId: widget.deviceId,
+    );
+
+    try {
+      // PACKET: [OpCode, Payload]
+      await ble.writeCharacteristicWithResponse(
+        characteristic,
+        value: OpCodes.commandWithByte(OpCodes.restartEsp, 0),
+      );
+      // We wait for the notification to update the UI text
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Write Failed: $e")));
+      }
+    }
   }
 
   Future<void> _toggleFlash() async {
@@ -261,6 +291,23 @@ class _ConnectedPageState extends State<ConnectedPage> {
                       backgroundColor: _isCurrentlyBlinking
                           ? Colors.red
                           : Colors.green, // Visual cue
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+
+                  SizedBox.square(dimension: 16),
+
+                  // --- RESTART BUTTON ---
+                  ElevatedButton.icon(
+                    onPressed: _isReady ? _restartESP : null,
+                    icon: Icon(Icons.lock_reset),
+                    label: Text("RESTART"),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 30,
+                        vertical: 15,
+                      ),
+                      backgroundColor: Colors.red,
                       foregroundColor: Colors.white,
                     ),
                   ),

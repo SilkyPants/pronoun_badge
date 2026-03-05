@@ -8,6 +8,8 @@ abstract class OpCodes {
   static const int getStatus = 0x02;
   static const int listFiles = 0x04;
 
+  static const int restartEsp = 0x99;
+
   // --- File/OTA Transfer Commands ---
   static const int fileUploadStart = 0x10;
   static const int uploadData = 0x11;
