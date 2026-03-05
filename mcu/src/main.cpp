@@ -46,13 +46,13 @@ struct __attribute__((packed)) StatusPacket {
     uint32_t usedFS;                            // 4 bytes
 };
 
-// --- COMMAND 3: List LittleFS Directory (OpCode 0x02) ---
+// --- COMMAND 3: Get device status (OpCode 0x02) ---
 void cmd_get_status(size_t len, const uint8_t* data, BLECharacteristic* pChar) {
     // 1. Prepare the packet:
     StatusPacket packet;
     packet.flashingState = isBlinking;
-    packet.totalFS = isBlinking;
-    packet.usedFS = isBlinking;
+    packet.totalFS = 0;
+    packet.usedFS = 0;
 
     // 2. Push to BLE stack and alert the phone
     pChar->setValue((uint8_t*)&packet, sizeof(StatusPacket));

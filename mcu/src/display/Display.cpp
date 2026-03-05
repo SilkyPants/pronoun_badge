@@ -125,11 +125,13 @@ void invertDisplay(bool invert)
 
 void drawBootImage()
 {
+#ifdef BOOT_IMAGE_BITS
 #ifdef USE_TFT_ESPI
     tft.pushImage(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, BOOT_IMAGE_BITS);
 #else
     u8g2.clearBuffer();
     u8g2.drawXBMP(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, BOOT_IMAGE_BITS);
     u8g2.sendBuffer();
+#endif
 #endif
 }
