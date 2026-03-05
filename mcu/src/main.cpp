@@ -129,7 +129,7 @@ void loadImageNames() {
     File file = root.openNextFile();
     while (file && badgeCount < MAX_FILES) {
         // Copy filename directly into our pre-allocated slots
-        strncpy(badgeList[badgeCount], file.name(), MAX_FILENAME_LEN - 1);
+        snprintf(badgeList[badgeCount], MAX_FILENAME_LEN, "/%s", file.name());
         
         // Ensure null-termination
         badgeList[badgeCount][MAX_FILENAME_LEN - 1] = '\0';
